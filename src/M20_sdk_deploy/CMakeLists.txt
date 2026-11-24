@@ -14,6 +14,46 @@ endif()
 add_definitions(-w)
 add_compile_options(-fPIC)
 
+option(M20_JOINT_BENCH_ONLY "Build only the M20 Pro manual joint bench" OFF)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(drdds REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(rmw REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+set(M20_SIM_DIR interface/robot/simulation)
+set(M20_PRO_DIR M20_description/M20_Pro)
+set(M20_PRO_URDF "${CMAKE_CURRENT_SOURCE_DIR}/${M20_PRO_DIR}/urdf/M20.urdf")
+set(M20_URDF_READER "${CMAKE_CURRENT_SOURCE_DIR}/${M20_SIM_DIR}/m20_pro_urdf.py")
+set(M20_LIMITS_HEADER "${CMAKE_CURRENT_BINARY_DIR}/m20_pro_urdf_limits.hpp")
+add_custom_command(OUTPUT "${M20_LIMITS_HEADER}"
+  COMMAND "${Python3_EXECUTABLE}" "${M20_URDF_READER}" "${M20_PRO_URDF}" "${M20_LIMITS_HEADER}"
+  DEPENDS "${M20_URDF_READER}" "${M20_PRO_URDF}"
+  VERBATIM)
+add_executable(m20_joint_bench_node tools/m20_joint_bench.cpp "${M20_LIMITS_HEADER}")
+target_include_directories(m20_joint_bench_node PRIVATE include/types third_party/eigen "${CMAKE_CURRENT_BINARY_DIR}")
+ament_target_dependencies(m20_joint_bench_node rclcpp drdds sensor_msgs rmw)
+install(TARGETS m20_joint_bench_node DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS tools/m20_joint_bench_launcher.py DESTINATION lib/${PROJECT_NAME} RENAME m20_joint_bench)
+
+set(M20_MODEL_DIR M20_description/m20_mjcf)
+install(FILES ${M20_SIM_DIR}/mujoco_simulation_ros2.py ${M20_SIM_DIR}/m20_sim_config.py "${M20_URDF_READER}"
+  DESTINATION share/${PROJECT_NAME}/${M20_SIM_DIR})
+install(FILES ${M20_MODEL_DIR}/mjcf/M20_joint_demo.xml ${M20_MODEL_DIR}/mjcf/M20.xml
+  DESTINATION share/${PROJECT_NAME}/${M20_MODEL_DIR}/mjcf)
+install(DIRECTORY ${M20_MODEL_DIR}/meshes/
+  DESTINATION share/${PROJECT_NAME}/${M20_MODEL_DIR}/meshes FILES_MATCHING PATTERN "*.STL")
+install(FILES "${M20_PRO_URDF}" DESTINATION share/${PROJECT_NAME}/${M20_PRO_DIR}/urdf)
+install(DIRECTORY ${M20_PRO_DIR}/mjcf/ DESTINATION share/${PROJECT_NAME}/${M20_PRO_DIR}/mjcf
+  FILES_MATCHING PATTERN "*.xml" PATTERN "*.STL")
+
+if(M20_JOINT_BENCH_ONLY)
+  ament_package()
+  return()
+endif()
+
 # 配置选项
 set(BUILD_PLATFORM "x86" CACHE STRING "Target platform (x86 or arm)")
 
@@ -23,9 +63,6 @@ if(BUILD_PLATFORM STREQUAL "arm")
 endif()
 
 # 查找依赖包
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(drdds REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 

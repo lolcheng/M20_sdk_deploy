@@ -33,20 +33,21 @@
 #include "user_command_interface.h"
 
 
+// 机器人错误状态
 union RobotErrorState {
     struct {
-        uint32_t imu_num_error: 1;
-        uint32_t imu_update_overtime: 1;
-        uint32_t command_heartbeat_overtime: 1;
-        uint32_t driver_error: 1;
-        uint32_t motor_heat_warn: 1;
-        uint32_t joint_num_error: 1;
-        uint32_t joint_update_error: 1;
-        uint32_t battery_low_warn: 1;
-        uint32_t battery_heat_warn: 1;
-        uint32_t cpu_heat_warn: 1;
-        uint32_t cpu_freq_warn: 1;
-        uint32_t reserved: 21;
+        uint32_t imu_num_error: 1;              // IMU数据异常
+        uint32_t imu_update_overtime: 1;        // IMU数据更新超时
+        uint32_t command_heartbeat_overtime: 1; // 命令心跳超时
+        uint32_t driver_error: 1;               // 驱动器错误
+        uint32_t motor_heat_warn: 1;            // 电机过热警告
+        uint32_t joint_num_error: 1;            // 关节数据异常
+        uint32_t joint_update_error: 1;         // 关节更新异常
+        uint32_t battery_low_warn: 1;           // 电池电量警告
+        uint32_t battery_heat_warn: 1;          // 电池温度警告
+        uint32_t cpu_heat_warn: 1;              // CPU温度警告
+        uint32_t cpu_freq_warn: 1;              // CPU频率警告
+        uint32_t reserved: 21;                  // 保留位   
     };
     uint32_t error_code;
 };

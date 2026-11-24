@@ -1,0 +1,146 @@
+云深处山猫 M20 SDK 部署工作区结构
+=================================
+
+本工作区有两个 ROS 2 包：m20_sdk_deploy 负责控制，drdds 定义通信消息。
+下列目录树逐项列出项目源码、消息和文档；批量网格、第三方库和本地缓存不逐个展开。
+
+一、目录树与文件职责
+
+sdk_deploy/
+└── src/
+    ├── M20_sdk_deploy/                    ROS 2 包 m20_sdk_deploy，产出 rl_deploy 和 m20_joint_bench。
+    │   ├── README.md                     仿真、实机部署步骤和控制接口用法。
+    │   ├── CMakeLists.txt                 构建并安装 C++ 节点，选择 x86 或 ARM 的 ONNX Runtime。
+    │   ├── package.xml                    ROS 2 包元信息及 rclcpp、drdds 等依赖。
+    │   ├── .gitignore                    此包的构建、调试及数据目录忽略规则。
+    │   ├── main.cpp                      进程入口：初始化 ROS 2，选择输入源，启动 M20 状态机。
+    │   ├── tools/
+    │   │   ├── m20_joint_bench.cpp       MuJoCo 和实机共用的命令、控制和保护逻辑。
+    │   │   └── m20_joint_bench_launcher.py  安装为 m20_joint_bench；按参数选择模式，仿真时启动 MuJoCo。
+    │   ├── include/
+    │   │   ├── types/
+    │   │   │   ├── common_types.h         Eigen 类型别名、机器人观测、动作、用户指令和网络数据结构。
+    │   │   │   ├── custom_types.h         M20 机型、运动状态、输入源及按键枚举。
+    │   │   │   ├── dds_types.h            C++ 内部电池、关节、IMU 数据结构及电机命令索引。
+    │   │   │   └── m20_joint_layout.hpp   M20 电机名和 SDK 关节方向排列。
+    │   │   └── utils/
+    │   │       ├── basic_function.hpp    角度换算、限幅、姿态矩阵、时间戳和插值工具。
+    │   │       ├── json.hpp              内置 nlohmann/json 头文件，供手柄消息等使用。
+    │   │       ├── motion_state_feedback.hpp  在控制器与输入接口间共享运动状态等反馈。
+    │   │       ├── safe_controller.hpp   监测关节、驱动器、温度和 IMU；异常时设置安全模式。
+    │   │       └── thread_pool.hpp       通用线程池，供 UDP 接收后的任务分发使用。
+    │   ├── interface/
+    │   │   ├── CMakeLists.txt            将手柄 SDK 等实现编入 interface 静态库。
+    │   │   ├── network/
+    │   │   │   ├── heartbeat.hpp         维护手柄客户端心跳与活跃状态。
+    │   │   │   └── udp_server.hpp        手柄模式下接收、分发 UDP 消息并发送响应。
+    │   │   ├── robot/
+    │   │   │   ├── robot_interface.h     统一关节与 IMU 的读取、关节指令发送接口；创建 rl_deploy 节点。
+    │   │   │   ├── hardware/
+    │   │   │   │   ├── dds_interface.hpp  ROS 2/DDS 通信基类，收关节、IMU 和电池反馈，发关节指令。
+    │   │   │   │   └── m20_interface.hpp  M20 专用实现：16 路关节/轮电机、方向与零位换算、开机反馈检查。
+    │   │   │   └── simulation/
+    │   │   │       ├── mujoco_simulation_ros2.py  ROS 2 仿真节点，支持常规仿真和固定基座关节测试。
+    │   │   │       ├── m20_joint_demo.py   仿真专用终端节点：设置腿关节角度和轮速，查看反馈。
+    │   │   │       ├── m20_pro_urdf.py    读取 M20 Pro URDF，构建时生成测试台的 C++ 机械限位表。
+    │   │   │       └── m20_sim_config.py  仿真坐标、关节索引和电机 demo 的共享配置。
+    │   │   └── user_command/
+    │   │       ├── user_command_interface.h  键盘、手柄和 ROS 2 输入的共同接口与指令结构访问。
+    │   │       ├── keyboard_interface.hpp   当前默认实现：从终端读取按键并生成状态、速度指令。
+    │   │       ├── gamepad_interface.hpp    解析手柄按键、摇杆和网络消息，转换成控制指令。
+    │   │       ├── ros2_command_interface.hpp  ROS 2 指令接收、校验、限幅、超时处理及状态发布。
+    │   │       └── keyboard_interface_sim.hpp  另一套基于 Linux evdev 的键盘实现，当前入口未选用。
+    │   ├── state_machine/
+    │   │   ├── state_base.h              各运动状态的生命周期接口及共享控制数据。
+    │   │   ├── state_machine_base.h      ROS 2 回调、定时控制循环、状态切换及状态发布调度。
+    │   │   ├── parameters/
+    │   │   │   ├── control_parameters.h  机身几何、姿态、控制增益、限值和轨迹时长等参数声明。
+    │   │   │   └── m20_control_parameters.cpp  初始化 M20 的几何、姿态、关节增益及限值参数。
+    │   │   └── quadruped_wheel/
+    │   │       ├── qw_state_machine.hpp   组装 M20 接口、输入源、安全监控及五个运动状态。
+    │   │       ├── idle_state.hpp         初始待机：检查关节反馈、发送零指令并等待站立请求。
+    │   │       ├── standup_state.hpp      根据当前姿态和目标高度生成站立关节轨迹。
+    │   │       ├── liedown_state.hpp      生成从当前位置下降到趴下姿态的关节轨迹。
+    │   │       ├── joint_damping_state.hpp  下发以阻尼为主的关节指令，保持一段时间后返回待机。
+    │   │       └── rl_control_state.hpp   载入策略、收集观测并运行推理线程，将动作送至机器人接口。
+    │   ├── run_policy/
+    │   │   ├── policy_runner_base.hpp     策略接口：进入状态时初始化、根据观测和指令输出动作。
+    │   │   └── m20_policy_runner.hpp      组装观测历史、转换关节顺序、执行 ONNX 推理和动作后处理。
+    │   ├── policy/
+    │   │   └── policy.onnx                随源码提供的 M20 策略模型，供 rl_deploy 运行时加载。
+    │   ├── scripts/
+    │   │   ├── pt_to_onnx.py              离线导出 TorchScript 策略并对比 ONNX 推理结果，不参与运行。
+    │   │   ├── m20_preflight.py           实机只读检查：采样 16 路关节和 IMU，检查反馈是否持续更新。
+    │   │   └── m20_joint_monitor.py       实机只读终端监视器：持续显示 16 路原始位置和速度。
+    │   ├── M20_description/
+    │   │   ├── M20_Pro/
+    │   │   │   ├── urdf/M20.urdf        测试台的关节零位、正方向和机械限位来源。
+    │   │   │   ├── mjcf/                MuJoCo 关节测试台使用的 M20 Pro 本体模型和网格。
+    │   │   │   └── usd/                 M20 Pro 的 USD 模型及配置。
+    │   │   └── m20_mjcf/
+    │   │       ├── meshes/               仿真用机器人与场景 STL 网格，批量资产不逐个列出。
+    │   │       └── mjcf/
+    │   │           ├── M20.xml            M20 机器人本体、关节、执行器和传感器模型。
+    │   │           ├── scene.xml          场景几何、网格资源、地面及环境配置。
+    │   │           ├── stair.xml          楼梯地形定义。
+    │   │           ├── M20_stair.xml      默认仿真入口，组合 M20.xml、scene.xml 和 stair.xml。
+    │   │           └── M20_joint_demo.xml 固定基座测试台，用于逐关节、逐轮验证。
+    │   └── third_party/
+    │       ├── eigen/                    线性代数头文件；上游测试、示例及文档随库保留。
+    │       ├── gamepad/                  手柄 SDK：include/ 与 src/ 用于构建，另带示例、文档和 APK。
+    │       └── onnxruntime/
+    │           ├── arm/                  ARM 版推理头文件、共享库及随库文档。
+    │           └── x86/                  x86 版推理头文件、共享库及随库文档。
+    └── drdds/                            ROS 2 接口包，定义通信格式，不运行独立节点。
+        ├── CMakeLists.txt                 调用 rosidl 为 msg/ 和 srv/ 生成接口代码。
+        ├── package.xml                    接口包元信息及生成器、消息依赖。
+        ├── msg/
+        │   ├── MetaType.msg               通用消息头：帧编号和时间戳。
+        │   ├── BatteryData.msg            电池反馈消息，包含一个或多个电池数据项。
+        │   ├── BatteryDataValue.msg       单个电池的数据字段，如电压、电流和剩余电量。
+        │   ├── GamepadData.msg            通用手柄摇杆和按键消息；当前手柄输入走 UDP 接口。
+        │   ├── ImuData.msg                带消息头的 IMU 反馈。
+        │   ├── ImuDataValue.msg           姿态角、角速度和线加速度。
+        │   ├── JointData.msg              单关节反馈：位置、速度、力矩、状态字和温度。
+        │   ├── JointDataCmd.msg           单关节指令：位置、速度、力矩、PD 增益和控制字。
+        │   ├── JointsData.msg             带消息头的整机多关节反馈。
+        │   ├── JointsDataValue.msg        固定 16 路 JointData 的载荷。
+        │   ├── JointsDataCmd.msg          带消息头的整机多关节指令。
+        │   ├── JointsDataCmdValue.msg     固定 16 路 JointDataCmd 的载荷。
+        │   ├── JointValue.msg             另一种单关节反馈，name 字段为可变长度。
+        │   ├── JointCmdValue.msg          另一种单关节指令，name 字段为可变长度。
+        │   ├── RobotStatus.msg            SDK 汇总状态：模式、指令、关节、姿态和数据新鲜度等。
+        │   ├── StdMsgFloat32.msg          通用单精度浮点消息。
+        │   ├── StdMsgInt32.msg            通用 32 位整数消息。
+        │   ├── StdStatus.msg              通用状态与错误码。
+        │   ├── Steer.msg                  带消息头的通用六轴操控消息。
+        │   └── SteerValue.msg             x/y/z 和 roll/pitch/yaw 六个分量。
+        └── srv/
+            └── StdSrvInt32.srv            通用服务定义：整数命令请求、整数结果响应。
+
+二、如何顺着代码读
+
+1. 构建：drdds 先生成消息类型，m20_sdk_deploy 再链接它们并产出 rl_deploy。
+   安装目标是可执行文件；当前策略通过源码中的路径定位，ONNX Runtime 也从包内
+   third_party/ 对应平台查找，因此不能把单独拷贝 rl_deploy 当成完整部署。
+2. 入口：main.cpp 构造 QwStateMachine 并选择输入源（默认终端键盘）。
+   切换手柄或 ROS 2 的入口也在这里；状态机统一读取 UserCommandInterface。
+3. 控制：state_machine_base.h 名义上每 5 ms 刷新反馈、运行当前状态并判断切换。
+   状态各自负责关节指令；在策略状态下，由 m20_policy_runner.hpp 生成动作。
+4. 实机与仿真复用同一个控制器。区别在于另一端是机器人固件，还是单独运行的
+   MuJoCo 节点；仿真脚本只模拟下表中的关节指令、关节反馈和 IMU，不发布电池反馈。
+5. 手动关节测试使用 m20_joint_bench。--sim 启动 MuJoCo 并接入 /m20_joint_bench_sim/ 下的
+   JOINTS_CMD、JOINTS_DATA、IMU。--hardware 接入实机的同名根话题。两种模式的 IMU
+   都用 sensor_msgs/msg/Imu，控制逻辑在 tools/m20_joint_bench.cpp。
+
+三、主要 ROS 2 数据流（节点使用默认名称与命名空间）
+
+话题                            方向（以 rl_deploy 为中心）          消息类型
+/JOINTS_CMD                     发往实机或仿真                       drdds/msg/JointsDataCmd
+/JOINTS_DATA                    接收关节反馈                         drdds/msg/JointsData
+/IMU_DATA                       接收 IMU 反馈                        drdds/msg/ImuData
+/BATTERY_DATA                   接收实机电池反馈                     drdds/msg/BatteryData
+/rl_deploy/command_state        ROS 2 输入模式下接收状态请求          std_msgs/msg/String
+/rl_deploy/cmd_vel              ROS 2 输入模式下接收速度请求          geometry_msgs/msg/Twist
+/rl_deploy/effective_cmd_vel    发布实际采用的速度指令（目标 50 Hz）  geometry_msgs/msg/TwistStamped
+/rl_deploy/status               发布汇总状态（目标 10 Hz）           drdds/msg/RobotStatus

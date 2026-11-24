@@ -17,9 +17,11 @@
 #include <thread>
 #include <vector>
 
+// 线程池类：用于管理线程池以并发执行任务
 class ThreadPool {
 public:
     ThreadPool(size_t numThreads) : stop(false) {
+        // 创建指定数量的工作线程
         for (size_t i = 0; i < numThreads; ++i) {
             workers.emplace_back([this]() {
                 while (true) {
@@ -46,6 +48,7 @@ public:
         for (std::thread& worker : workers) worker.join();
     }
 
+    // 入队一个任务到线程池中
     void enqueue(std::function<void()> task) {
         {
             std::unique_lock<std::mutex> lock(queueMutex);

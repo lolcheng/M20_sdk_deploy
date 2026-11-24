@@ -1,0 +1,6 @@
+<mujoco model="M20_joint_demo">
+    <include file="./M20.xml"/>
+    <equality>
+        <weld name="demo_mount" body1="base_link"/>
+    </equality>
+</mujoco>

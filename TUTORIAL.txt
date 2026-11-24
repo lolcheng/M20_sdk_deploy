@@ -1,0 +1,52 @@
+从 sdk_deploy 根目录执行一次。已有 MuJoCo Python 环境的话，可以跳过后三行：
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select drdds
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python3 -m pip install 'numpy<2' 'mujoco==3.3.7' scipy
+如果创建虚拟环境时提示缺少 ensurepip，先安装 python3-venv。
+
+两个终端都在仓库根目录执行：
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+source .venv/bin/activate
+export ROS_DOMAIN_ID=52
+**终端 1：**启动固定基座仿真。无桌面时，在命令开头加 SDK_SIM_HEADLESS=1。不要同时启动 rl_deploy。
+M20_SIM_JOINT_DEMO=1 python3 src/M20_sdk_deploy/interface/robot/simulation/mujoco_simulation_ros2.py
+**终端 2：**启动控制台。
+python3 src/M20_sdk_deploy/interface/robot/simulation/m20_joint_demo.py
+
+看到 m20> 后，可以逐条输入：
+status                # 查看反馈，等到显示 fresh
+arm                   # 保持当前腿角，轮速目标置零
+jog fl_hipx +2deg     # 左前髋侧摆相对移动 2°
+pos fl_hipx 24deg     # 左前髋侧摆设为绝对目标 24°
+wheel fr 0.5rad/s     # 右前轮转动，2 秒后自动归零；负值反转
+stop                  # 保持当前腿角，轮速目标归零
+quit                  # 退出控制台
+limits 可查看角度范围；`fl/fr/hl/hr` 分别代表左前、右前、左后、右后，腿关节后缀是 _hipx、`_hipy`、`_knee`。
+
+1. 在 AOS 删除旧目录
+先正常退出旧控制程序。确认旧目录里没有要保留的实机专用文件，再在 AOS 执行：
+cd /home/user
+ls -ld /home/user/sdk_deploy
+rm -rI -- /home/user/sdk_deploy
+确认删除后，旧目录及其中的构建产物不会保留。我没有连接 AOS，也没有执行删除。
+
+2. 从 NUC 上传新版
+cd ~/DeepRobotics/sdk_deploy
+ssh user@10.21.31.103 'mkdir /home/user/sdk_deploy' &&
+scp -r src README.md STRUCTURE.txt TUTORIAL.txt \
+  user@10.21.31.103:/home/user/sdk_deploy/
+
+3. 在 AOS 编译并启动
+新开 SSH 会话，只加载 Foxy 和厂商环境。下面的构建直接用固件自带的 drdds，不覆盖它：
+ssh user@10.21.31.103
+cd /home/user/sdk_deploy
+source /opt/ros/foxy/setup.bash
+colcon build --packages-up-to m20_sdk_deploy --cmake-args -DM20_JOINT_BENCH_ONLY=ON
+source /opt/robot/scripts/setup_ros2.sh
+source install/local_setup.bash
+ros2 run m20_sdk_deploy m20_joint_bench --hardware
+
+python3 ~/sdk_deploy/src/M20_sdk_deploy/scripts/m20_joint_monitor.py --hz 5

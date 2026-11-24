@@ -14,21 +14,21 @@
 
 using namespace types;
 
+// 角度与弧度转换
 inline float Deg2Rad(float deg){
     return deg /180.f * M_PI;
 }
-
 inline float Rad2Deg(float rad){
     return rad / M_PI * 180.;
 }
 
+// 限幅函数
 inline float LimitNumber(float data, float limit){
     limit = fabs(limit);
     if(data > limit) data = limit;
     else if(data < -limit) data = -limit;
     return data;
 }
-
 inline float LimitNumber(float data, float low, float high){
     if(low > high){
         std::cerr << "error limit range" << std::endl;
@@ -39,6 +39,7 @@ inline float LimitNumber(float data, float low, float high){
     return data;
 }
 
+// 欧拉角转旋转矩阵
 inline Mat3f RpyToRm(const Vec3f &rpy){
     Eigen::AngleAxisf yawAngle(rpy(2), Vec3f::UnitZ());
     Eigen::AngleAxisf pitchAngle(rpy(1), Vec3f::UnitY());
@@ -47,6 +48,7 @@ inline Mat3f RpyToRm(const Vec3f &rpy){
     return q.matrix();
 }
 
+// 角度归一化为[-pi, pi]
 inline float NormalizeAngle(float angle) {
     float result = std::fmod(angle, 2 * M_PI);
     if (result < 0) {
@@ -58,6 +60,7 @@ inline float NormalizeAngle(float angle) {
     return result;
 }
 
+// 符号函数
 inline float Sign(const float &i){
     if (i > 0) {
         return 1.;
@@ -68,6 +71,7 @@ inline float Sign(const float &i){
     }
 }
 
+// 获取时间戳，单位毫秒
 inline  double GetTimestampMs(){
     static timespec startup_timestamp;
     timespec now_timestamp;
@@ -78,6 +82,7 @@ inline  double GetTimestampMs(){
     return (now_timestamp.tv_sec-startup_timestamp.tv_sec)*1e3 + (now_timestamp.tv_nsec-startup_timestamp.tv_nsec)/1e6;
 }
 
+// TODO：获取三次样条位置
 inline float GetCubicSplinePos(float x0, float v0, float xf, float vf, float t, float T){
         if(t >= T) return xf;
         float a, b, c, d;
@@ -88,6 +93,7 @@ inline float GetCubicSplinePos(float x0, float v0, float xf, float vf, float t, 
         return a*pow(t, 3)+b*pow(t, 2)+c*t+d;
 }
 
+// TODO：获取三次样条速度
 inline float GetCubicSplineVel(float x0, float v0, float xf, float vf, float t, float T){
     if(t >= T) return 0;
     float a, b, c;
